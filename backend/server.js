@@ -2,16 +2,24 @@ const express = require('express');
 const { WebSocketServer } = require('ws');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve admin at root (open http://YOUR_IP:4000 in browser)
+// Serve admin at root when web-admin/index.html exists (e.g. local); else show backend message
 const adminPath = path.join(__dirname, '..', 'web-admin');
-app.use(express.static(adminPath));
-app.get('/', (req, res) => res.sendFile(path.join(adminPath, 'index.html')));
+const adminIndex = path.join(adminPath, 'index.html');
+if (fs.existsSync(adminIndex)) {
+  app.use(express.static(adminPath));
+  app.get('/', (req, res) => res.sendFile(adminIndex));
+} else {
+  app.get('/', (req, res) =>
+    res.send('<h1>Connection Test Backend</h1><p>API: <a href="/api/health">/api/health</a>. WebSocket at /ws. Use your local admin page and set Backend URL to this domain.</p>')
+  );
+}
 
 const server = http.createServer(app);
 
