@@ -14,8 +14,15 @@
       .then((r) => r.json())
       .then((list) => {
         const el = document.getElementById('deviceList');
-        if (!list.length) {
-          el.innerHTML = '<span class="empty">No devices connected. Open the Connection Test app on your iPhone.</span>';
+        const connectedIds = new Set((list || []).filter((d) => d.connected).map((d) => d.deviceId));
+        if (selectedDeviceId && !connectedIds.has(selectedDeviceId)) {
+          document.getElementById('deviceDisconnectedWarning').style.display = 'block';
+          document.getElementById('deviceDisconnectedWarning').textContent = 'Selected device is disconnected. Open the Connection Test app on your iPhone, tap Test, then refresh this page.';
+        } else {
+          document.getElementById('deviceDisconnectedWarning').style.display = 'none';
+        }
+        if (!list || !list.length) {
+          el.innerHTML = '<span class="empty">No devices connected. Open the Connection Test app on your iPhone, enter the server URL, and tap Test.</span>';
           return;
         }
         el.innerHTML = list
@@ -66,7 +73,12 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
-    }).then((r) => r.json());
+    }).then((r) => {
+      return r.json().then((body) => {
+        if (!r.ok) return Promise.reject(new Error(body.error || 'Request failed'));
+        return body;
+      });
+    });
   }
 
   function startListening() {
@@ -85,7 +97,9 @@
       document.getElementById('audioStatus').textContent = 'Streaming… (listen here)';
       document.getElementById('btnStartListen').style.display = 'none';
       document.getElementById('btnStopListen').style.display = 'inline-block';
-      sendCommand(selectedDeviceId, 'start_listening');
+      sendCommand(selectedDeviceId, 'start_listening').catch((err) => {
+        document.getElementById('audioStatus').textContent = 'Device disconnected. Reconnect the app on your phone and try again.';
+      });
     };
 
     adminWs.onmessage = (ev) => {
@@ -134,8 +148,12 @@
     const base = getBackend();
     document.getElementById('location').textContent = 'Fetching…';
     fetch(`${base}/api/devices/${encodeURIComponent(selectedDeviceId)}/location`)
-      .then((r) => r.json())
-      .then((data) => {
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          document.getElementById('location').textContent = data.error === 'Device not found' ? 'Device disconnected. Reconnect the app on your phone and try again.' : (data.error || 'Failed to get location.');
+          return;
+        }
         if (data.lat != null) {
           document.getElementById('location').textContent =
             `Lat: ${data.lat}\nLon: ${data.lon}\nAccuracy: ${data.accuracy ?? '—'} m\n\nhttps://www.google.com/maps?q=${data.lat},${data.lon}`;
