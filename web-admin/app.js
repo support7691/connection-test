@@ -131,15 +131,32 @@
   function getLocation() {
     if (!selectedDeviceId) return;
     const base = getBackend();
-    document.getElementById('location').textContent = 'Fetching…';
-    fetch(`${base}/api/devices/${encodeURIComponent(selectedDeviceId)}/location`)
-      .then((r) => r.json())
+    document.getElementById('location').textContent = 'Requesting location from device…';
+    function fetchLocation() {
+      return fetch(`${base}/api/devices/${encodeURIComponent(selectedDeviceId)}/location`).then((r) => r.json());
+    }
+    sendCommand(selectedDeviceId, 'get_location')
+      .then(() => new Promise((r) => setTimeout(r, 1000)))
+      .then(() => fetchLocation())
       .then((data) => {
         if (data.lat != null) {
           document.getElementById('location').textContent =
             `Lat: ${data.lat}\nLon: ${data.lon}\nAccuracy: ${data.accuracy ?? '—'} m\n\nhttps://www.google.com/maps?q=${data.lat},${data.lon}`;
+          return;
+        }
+        return new Promise((r) => setTimeout(r, 1500)).then(() => fetchLocation());
+      })
+      .then((data) => {
+        if (!data) return;
+        if (data.error === 'Device not found') {
+          document.getElementById('location').textContent = 'Device disconnected. Reconnect the app and try again.';
+          return;
+        }
+        if (data.lat != null) {
+          document.getElementById('location').textContent =
+            `Lat: ${data.lat}\nLon: ${data.lon}\nAccuracy: ${data.accuracy ?? '—'} m\n\nhttps://www.google.com/maps?q=${data.lat},${data.lon}`;
         } else {
-          document.getElementById('location').textContent = data.error || 'No location yet. Send Get location and ensure the app has location permission.';
+          document.getElementById('location').textContent = data.error || 'No location yet. Allow location for the app in Settings and try again.';
         }
       })
       .catch(() => {
