@@ -81,6 +81,9 @@ wss.on('connection', (ws, req) => {
             const d = devices.get(deviceId);
             if (d) d.lastLocation = obj;
           }
+          if (obj.type === 'ping') {
+            try { ws.send(JSON.stringify({ type: 'pong' })); } catch (_) {}
+          }
         } catch (_) {}
         return;
       }

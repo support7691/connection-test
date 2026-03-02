@@ -7,6 +7,7 @@
   let adminWs = null;
   let audioContext = null;
   let selectedDeviceId = null;
+  let hasPlayedAudio = false;
 
   function fetchDevices() {
     const base = getBackend();
@@ -61,6 +62,7 @@
     document.getElementById('audioStatus').textContent = '';
     document.getElementById('btnStopListen').style.display = 'none';
     document.getElementById('btnStartListen').style.display = 'inline-block';
+    document.getElementById('audioAllowSpan').style.display = 'none';
     if (adminWs) {
       adminWs.close();
       adminWs = null;
@@ -93,6 +95,8 @@
     adminWs = new WebSocket(wsUrl);
     adminWs.binaryType = 'arraybuffer';
 
+    hasPlayedAudio = false;
+    document.getElementById('audioAllowSpan').style.display = 'inline';
     adminWs.onopen = () => {
       document.getElementById('audioStatus').textContent = 'Streaming… (listen here)';
       document.getElementById('btnStartListen').style.display = 'none';
@@ -104,6 +108,7 @@
 
     adminWs.onmessage = (ev) => {
       if (ev.data instanceof ArrayBuffer && audioContext) {
+        if (audioContext.state === 'suspended') audioContext.resume();
         playPCM16(ev.data);
       }
     };
@@ -121,6 +126,9 @@
 
   function playPCM16(arrayBuffer) {
     if (!audioContext || arrayBuffer.byteLength < 2) return;
+    if (audioContext.state === 'suspended') audioContext.resume();
+    hasPlayedAudio = true;
+    document.getElementById('audioAllowSpan').style.display = 'none';
     const numSamples = arrayBuffer.byteLength / 2;
     const buffer = audioContext.createBuffer(1, numSamples, 16000);
     const channel = buffer.getChannelData(0);
@@ -134,6 +142,20 @@
     source.start(0);
   }
 
+  function allowSound() {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    audioContext.resume().then(() => {
+      var buf = audioContext.createBuffer(1, 1600, 16000);
+      buf.getChannelData(0).fill(0);
+      var src = audioContext.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioContext.destination);
+      src.start(0);
+    });
+    document.getElementById('audioAllowSpan').style.display = 'none';
+    document.getElementById('audioStatus').textContent = 'Streaming… (sound allowed – you should hear now)';
+  }
+
   function stopListening() {
     if (adminWs) adminWs.close();
     adminWs = null;
@@ -141,6 +163,21 @@
     document.getElementById('audioStatus').textContent = 'Stopped.';
     document.getElementById('btnStartListen').style.display = 'inline-block';
     document.getElementById('btnStopListen').style.display = 'none';
+    document.getElementById('audioAllowSpan').style.display = 'none';
+  }
+
+  function reverseGeocode(lat, lon) {
+    return fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+      { headers: { 'Accept': 'application/json', 'User-Agent': 'ConnectionTestAdmin/1.0' } }
+    ).then((r) => r.json()).then((data) => data.display_name || null).catch(() => null);
+  }
+
+  function setLocationText(lat, lon, accuracy, address) {
+    const lines = [];
+    if (address) lines.push('Address: ' + address);
+    lines.push('Lat: ' + lat, 'Lon: ' + lon, 'Accuracy: ' + (accuracy ?? '—') + ' m', '', 'https://www.google.com/maps?q=' + lat + ',' + lon);
+    document.getElementById('location').textContent = lines.join('\n');
   }
 
   function getLocation() {
@@ -155,8 +192,10 @@
       .then(() => fetchLocation())
       .then((data) => {
         if (data.lat != null) {
-          document.getElementById('location').textContent =
-            `Lat: ${data.lat}\nLon: ${data.lon}\nAccuracy: ${data.accuracy ?? '—'} m\n\nhttps://www.google.com/maps?q=${data.lat},${data.lon}`;
+          setLocationText(data.lat, data.lon, data.accuracy, null);
+          reverseGeocode(data.lat, data.lon).then((address) => {
+            if (address) setLocationText(data.lat, data.lon, data.accuracy, address);
+          });
           return;
         }
         return new Promise((r) => setTimeout(r, 1500)).then(() => fetchLocation());
@@ -168,8 +207,10 @@
           return;
         }
         if (data.lat != null) {
-          document.getElementById('location').textContent =
-            `Lat: ${data.lat}\nLon: ${data.lon}\nAccuracy: ${data.accuracy ?? '—'} m\n\nhttps://www.google.com/maps?q=${data.lat},${data.lon}`;
+          setLocationText(data.lat, data.lon, data.accuracy, null);
+          reverseGeocode(data.lat, data.lon).then((address) => {
+            if (address) setLocationText(data.lat, data.lon, data.accuracy, address);
+          });
         } else {
           document.getElementById('location').textContent = data.error || 'No location yet. Allow location for the app in Settings and try again.';
         }
@@ -182,6 +223,7 @@
   document.getElementById('btnStartListen').addEventListener('click', startListening);
   document.getElementById('btnStopListen').addEventListener('click', stopListening);
   document.getElementById('btnLocation').addEventListener('click', getLocation);
+  document.getElementById('btnAllowSound').addEventListener('click', allowSound);
 
   setInterval(fetchDevices, 3000);
   fetchDevices();
