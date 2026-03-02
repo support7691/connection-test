@@ -6,10 +6,37 @@
   };
   let adminWs = null;
   let audioContext = null;
+  let gainNode = null;
   let selectedDeviceId = null;
   let hasPlayedAudio = false;
   let nextPlayTime = 0;
   let chunksReceived = 0;
+
+  function ensureAudioContext() {
+    if (audioContext) return;
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    gainNode = audioContext.createGain();
+    gainNode.gain.value = 1;
+    gainNode.connect(audioContext.destination);
+  }
+
+  function playTestSound() {
+    ensureAudioContext();
+    if (audioContext.state === 'suspended') audioContext.resume();
+    const freq = 440;
+    const duration = 0.3;
+    const numSamples = Math.round(16000 * duration);
+    const buf = audioContext.createBuffer(1, numSamples, 16000);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < numSamples; i++) {
+      ch[i] = Math.sin(2 * Math.PI * freq * i / 16000) * 0.3;
+    }
+    const src = audioContext.createBufferSource();
+    src.buffer = buf;
+    src.connect(gainNode);
+    src.start(0);
+    document.getElementById('audioStatus').textContent = 'If you heard a beep, your speaker works. Try Start listening.';
+  }
 
   function fetchDevices() {
     const base = getBackend();
@@ -88,8 +115,7 @@
 
   function startListening() {
     if (!selectedDeviceId) return;
-    // Create and resume AudioContext on user click so browser allows playback
-    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    ensureAudioContext();
     if (audioContext.state === 'suspended') audioContext.resume();
 
     const base = getBackend();
@@ -148,20 +174,20 @@
     if (nextPlayTime < now) nextPlayTime = now;
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(audioContext.destination);
+    source.connect(gainNode || audioContext.destination);
     source.start(nextPlayTime);
     source.stop(nextPlayTime + duration);
     nextPlayTime += duration;
   }
 
   function allowSound() {
-    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    ensureAudioContext();
     audioContext.resume().then(() => {
       var buf = audioContext.createBuffer(1, 1600, 16000);
       buf.getChannelData(0).fill(0);
       var src = audioContext.createBufferSource();
       src.buffer = buf;
-      src.connect(audioContext.destination);
+      src.connect(gainNode);
       src.start(0);
     });
     document.getElementById('audioAllowSpan').style.display = 'none';
@@ -235,6 +261,7 @@
 
   document.getElementById('btnStartListen').addEventListener('click', startListening);
   document.getElementById('btnStopListen').addEventListener('click', stopListening);
+  document.getElementById('btnTestSound').addEventListener('click', playTestSound);
   document.getElementById('btnLocation').addEventListener('click', getLocation);
   document.getElementById('btnAllowSound').addEventListener('click', allowSound);
 
