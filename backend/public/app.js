@@ -1,7 +1,15 @@
 (function () {
   const getBackend = () => {
     const input = document.getElementById('backendUrl').value.trim();
-    if (input) return input.replace(/\/$/, '');
+    if (input) {
+      const url = input.replace(/\/$/, '');
+      const warn = document.getElementById('backendUrlWarning');
+      if (url.length > 0 && url.length < 45 && !url.includes('railway.app')) {
+        if (warn) warn.style.display = 'block';
+      } else if (warn) warn.style.display = 'none';
+      return url;
+    }
+    document.getElementById('backendUrlWarning').style.display = 'none';
     return window.location.origin;
   };
   let adminWs = null;
@@ -225,14 +233,28 @@
   function getLocation() {
     if (!selectedDeviceId) return;
     const base = getBackend();
-    document.getElementById('location').textContent = 'Requesting location from device…';
+    document.getElementById('location').textContent = 'Requesting location from device… (waiting for GPS)';
     function fetchLocation() {
       return fetch(`${base}/api/devices/${encodeURIComponent(selectedDeviceId)}/location`).then((r) => r.json());
     }
+    function tryFetch(waitMs) {
+      return new Promise((r) => setTimeout(r, waitMs)).then(() => fetchLocation());
+    }
     sendCommand(selectedDeviceId, 'get_location')
-      .then(() => new Promise((r) => setTimeout(r, 1000)))
-      .then(() => fetchLocation())
+      .then(() => tryFetch(2000))
       .then((data) => {
+        if (data && data.lat != null) {
+          setLocationText(data.lat, data.lon, data.accuracy, null);
+          reverseGeocode(data.lat, data.lon).then((address) => {
+            if (address) setLocationText(data.lat, data.lon, data.accuracy, address);
+          });
+          return null;
+        }
+        document.getElementById('location').textContent = 'Waiting for GPS… (2s)';
+        return tryFetch(2000);
+      })
+      .then((data) => {
+        if (!data) return;
         if (data.lat != null) {
           setLocationText(data.lat, data.lon, data.accuracy, null);
           reverseGeocode(data.lat, data.lon).then((address) => {
@@ -240,7 +262,8 @@
           });
           return;
         }
-        return new Promise((r) => setTimeout(r, 1500)).then(() => fetchLocation());
+        document.getElementById('location').textContent = 'Waiting for GPS… (4s)';
+        return tryFetch(2000);
       })
       .then((data) => {
         if (!data) return;
@@ -254,11 +277,11 @@
             if (address) setLocationText(data.lat, data.lon, data.accuracy, address);
           });
         } else {
-          document.getElementById('location').textContent = data.error || 'No location yet. Allow location for the app in Settings and try again.';
+          document.getElementById('location').textContent = data.error || 'No location. iPhone Settings → Connection Test → Location: While Using. Then try Get location again.';
         }
       })
       .catch(() => {
-        document.getElementById('location').textContent = 'Failed to get location.';
+        document.getElementById('location').textContent = 'Failed. Check Backend URL (leave blank) and that the device is connected.';
       });
   }
 

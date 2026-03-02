@@ -32,8 +32,9 @@
 <body>
   <h1>Connection Test - Admin</h1>
   <div class="card">
-    <label>Backend URL (leave blank to use this page’s URL)</label>
-    <input type="text" id="backendUrl" placeholder="https://resourceful-curiosity-production.up.railway.app" />
+    <label>Backend URL</label>
+    <input type="text" id="backendUrl" placeholder="Leave blank to use this page" />
+    <p style="font-size: 0.75rem; color: #f87171; margin-top: 6px; display: none;" id="backendUrlWarning">Use a full URL or leave blank. Wrong URL = no voice, no location.</p>
   </div>
   <div class="card">
     <div id="deviceList">Loading...</div>
@@ -54,6 +55,15 @@
     </span>
     <p style="font-size: 0.75rem; color: #888; margin-top: 6px;">No sound? Click <strong>Test sound</strong> first; then unmute tab, turn up volume, and <strong>Start listening</strong>. For location: tap <strong>Get location</strong> (allow location for the app on the phone in Settings).</p>
     <div id="location"></div>
+    <div class="card" style="margin-top: 12px; border-left: 3px solid #f59e0b;">
+      <strong style="font-size: 0.85rem;">No voice / no location?</strong>
+      <ul style="font-size: 0.8rem; color: #888; margin: 8px 0 0; padding-left: 20px;">
+        <li>Clear Backend URL above (leave blank) so this page is used.</li>
+        <li>On phone: open app → Continue → Test until it says Connected.</li>
+        <li>iPhone Settings → Connection Test → allow Microphone and Location (While Using).</li>
+        <li>Refresh this page, select device, then Start listening and Get location.</li>
+      </ul>
+    </div>
   </div>
 
   <script src="app.js"></script>
