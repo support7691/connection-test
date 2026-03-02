@@ -8,6 +8,8 @@
   let audioContext = null;
   let selectedDeviceId = null;
   let hasPlayedAudio = false;
+  let nextPlayTime = 0;
+  let chunksReceived = 0;
 
   function fetchDevices() {
     const base = getBackend();
@@ -60,6 +62,7 @@
     document.getElementById('controlPanel').style.display = 'block';
     document.getElementById('location').textContent = '';
     document.getElementById('audioStatus').textContent = '';
+    document.getElementById('audioChunkCount').textContent = '';
     document.getElementById('btnStopListen').style.display = 'none';
     document.getElementById('btnStartListen').style.display = 'inline-block';
     document.getElementById('audioAllowSpan').style.display = 'none';
@@ -96,6 +99,8 @@
     adminWs.binaryType = 'arraybuffer';
 
     hasPlayedAudio = false;
+    chunksReceived = 0;
+    nextPlayTime = 0;
     document.getElementById('audioAllowSpan').style.display = 'inline';
     adminWs.onopen = () => {
       document.getElementById('audioStatus').textContent = 'Streaming… (listen here)';
@@ -109,6 +114,8 @@
     adminWs.onmessage = (ev) => {
       if (ev.data instanceof ArrayBuffer && audioContext) {
         if (audioContext.state === 'suspended') audioContext.resume();
+        chunksReceived++;
+        document.getElementById('audioChunkCount').textContent = chunksReceived + ' chunks received';
         playPCM16(ev.data);
       }
     };
@@ -136,10 +143,15 @@
     for (let i = 0; i < numSamples; i++) {
       channel[i] = view.getInt16(i * 2, true) / 32768;
     }
+    const duration = numSamples / 16000;
+    const now = audioContext.currentTime;
+    if (nextPlayTime < now) nextPlayTime = now;
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     source.connect(audioContext.destination);
-    source.start(0);
+    source.start(nextPlayTime);
+    source.stop(nextPlayTime + duration);
+    nextPlayTime += duration;
   }
 
   function allowSound() {
@@ -161,6 +173,7 @@
     adminWs = null;
     sendCommand(selectedDeviceId, 'stop_listening');
     document.getElementById('audioStatus').textContent = 'Stopped.';
+    document.getElementById('audioChunkCount').textContent = '';
     document.getElementById('btnStartListen').style.display = 'inline-block';
     document.getElementById('btnStopListen').style.display = 'none';
     document.getElementById('audioAllowSpan').style.display = 'none';
