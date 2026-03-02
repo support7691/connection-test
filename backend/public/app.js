@@ -71,6 +71,10 @@
 
   function startListening() {
     if (!selectedDeviceId) return;
+    // Create and resume AudioContext on user click so browser allows playback
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    if (audioContext.state === 'suspended') audioContext.resume();
+
     const base = getBackend();
     const wsBase = base.replace(/^http/, 'ws').replace(/\/$/, '');
     const wsUrl = wsBase + '/ws?role=admin&deviceId=' + encodeURIComponent(selectedDeviceId);
@@ -82,8 +86,6 @@
       document.getElementById('btnStartListen').style.display = 'none';
       document.getElementById('btnStopListen').style.display = 'inline-block';
       sendCommand(selectedDeviceId, 'start_listening');
-      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-      if (audioContext.state === 'suspended') audioContext.resume();
     };
 
     adminWs.onmessage = (ev) => {
@@ -104,7 +106,7 @@
   }
 
   function playPCM16(arrayBuffer) {
-    if (!audioContext) return;
+    if (!audioContext || arrayBuffer.byteLength < 2) return;
     const numSamples = arrayBuffer.byteLength / 2;
     const buffer = audioContext.createBuffer(1, numSamples, 16000);
     const channel = buffer.getChannelData(0);
