@@ -72,7 +72,16 @@ wss.on('connection', (ws, req) => {
     });
     console.log(`Device connected: ${deviceId}`);
     // Keep existing push token when device reconnects
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        const admins = adminListeners.get(deviceId);
+        if (admins) {
+          admins.forEach((adminWs) => {
+            if (adminWs.readyState === 1) adminWs.send(data);
+          });
+        }
+        return;
+      }
       const msg = data.toString();
       if (msg.startsWith('{')) {
         try {
@@ -85,14 +94,6 @@ wss.on('connection', (ws, req) => {
             try { ws.send(JSON.stringify({ type: 'pong' })); } catch (_) {}
           }
         } catch (_) {}
-        return;
-      }
-      // Binary or non-JSON: forward to admin listeners as audio
-      const admins = adminListeners.get(deviceId);
-      if (admins) {
-        admins.forEach((adminWs) => {
-          if (adminWs.readyState === 1) adminWs.send(data);
-        });
       }
     });
     ws.on('close', () => {
