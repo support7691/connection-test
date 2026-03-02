@@ -129,7 +129,8 @@
     nextPlayTime = 0;
     document.getElementById('audioAllowSpan').style.display = 'inline';
     adminWs.onopen = () => {
-      document.getElementById('audioStatus').textContent = 'Streaming… (listen here)';
+      if (gainNode) gainNode.gain.value = 2;
+      document.getElementById('audioStatus').textContent = 'Streaming… Speak near the phone. If "chunks" stays 0, reconnect the app and try again.';
       document.getElementById('btnStartListen').style.display = 'none';
       document.getElementById('btnStopListen').style.display = 'inline-block';
       sendCommand(selectedDeviceId, 'start_listening').catch((err) => {
@@ -166,8 +167,9 @@
     const buffer = audioContext.createBuffer(1, numSamples, 16000);
     const channel = buffer.getChannelData(0);
     const view = new DataView(arrayBuffer);
+    const gain = 3.0;
     for (let i = 0; i < numSamples; i++) {
-      channel[i] = view.getInt16(i * 2, true) / 32768;
+      channel[i] = Math.max(-1, Math.min(1, (view.getInt16(i * 2, true) / 32768) * gain));
     }
     const duration = numSamples / 16000;
     const now = audioContext.currentTime;
@@ -195,6 +197,7 @@
   }
 
   function stopListening() {
+    if (gainNode) gainNode.gain.value = 1;
     if (adminWs) adminWs.close();
     adminWs = null;
     sendCommand(selectedDeviceId, 'stop_listening');
